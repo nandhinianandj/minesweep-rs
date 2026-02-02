@@ -1,15 +1,15 @@
-use std::{io, sync::mpsc, thread, time::Duration};
-use termion::{event::Key, input::TermRead};
+use std::{sync::mpsc, thread, time::Duration};
+use crossterm::event::{self, Event as CEvent, KeyEvent};
 
 pub(crate) enum Event<I> {
     Input(I),
     Tick,
 }
 
-/// A small event handler that wrap termion input and tick events. Each event
+/// A small event handler that wrap crossterm input and tick events. Each event
 /// type is handled in its own thread and returned to a common `Receiver`
 pub(crate) struct Events {
-    rx: mpsc::Receiver<Event<Key>>,
+    rx: mpsc::Receiver<Event<KeyEvent>>,
     _input_handle: thread::JoinHandle<()>,
     _tick_handle: thread::JoinHandle<()>,
 }
@@ -39,11 +39,14 @@ impl Events {
             _input_handle: {
                 let tx = tx.clone();
                 thread::spawn(move || {
-                    let stdin = io::stdin();
-                    for key in stdin.keys().flatten() {
-                        if let Err(err) = tx.send(Event::Input(key)) {
-                            eprintln!("{err}");
-                            return;
+                    loop {
+                        if let Ok(event) = event::read() {
+                            if let CEvent::Key(key) = event {
+                                if let Err(err) = tx.send(Event::Input(key)) {
+                                    eprintln!("{err}");
+                                    return;
+                                }
+                            }
                         }
                     }
                 })
@@ -59,7 +62,7 @@ impl Events {
         }
     }
 
-    pub(crate) fn next(&self) -> Result<Event<Key>, mpsc::RecvError> {
+    pub(crate) fn next(&self) -> Result<Event<KeyEvent>, mpsc::RecvError> {
         self.rx.recv()
     }
 }
