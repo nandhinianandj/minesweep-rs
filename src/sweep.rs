@@ -41,6 +41,10 @@ fn adjacent((row, column): Coordinate, rows: usize, columns: usize) -> impl Iter
             let row_offset = row_incr.offset(row);
             let column_offset = column_incr.offset(column);
 
+            if row_offset == row && column_offset == column {
+                return None;
+            }
+
             match (row_incr, column_incr) {
                 (Increment::Zero, Increment::Zero) => None,
                 (_, _) if row_offset < rows && column_offset < columns => {
@@ -205,5 +209,131 @@ impl Board {
             self.flagged_cells += 1;
         }
         Ok(flagged)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_board_initialization() {
+        let rows = 10;
+        let columns = 10;
+        let mines = 10;
+        let board = Board::new(rows, columns, mines).unwrap();
+
+        assert_eq!(board.rows, rows);
+        assert_eq!(board.columns, columns);
+        assert_eq!(board.mines, mines);
+        assert_eq!(board.tiles.len(), rows * columns);
+    }
+
+    #[test]
+    fn test_mine_placement() {
+        let rows = 10;
+        let columns = 10;
+        let mines = 10;
+        let board = Board::new(rows, columns, mines).unwrap();
+
+        let mine_count = board.tiles.iter().filter(|t| t.mine).count();
+        assert_eq!(mine_count, mines);
+    }
+
+    #[test]
+    fn test_adjacency() {
+        // Create a board with 0 mines to manually check logic if we could controlling randomness,
+        // but since we can't easily mock randomness here without changing code,
+        // we can check properties.
+        // For every tile, calculate adjacent mines and match with what the board says.
+        let rows = 5;
+        let columns = 5;
+        let mines = 5;
+        let board = Board::new(rows, columns, mines).unwrap();
+
+        for r in 0..rows {
+            for c in 0..columns {
+                let tile = board.tile(r, c).unwrap();
+                // Manually calculate adjacent mines
+                let mut count = 0;
+                for dr in -1..=1 {
+                    for dc in -1..=1 {
+                        if dr == 0 && dc == 0 { continue; }
+                        let nr = r as isize + dr;
+                        let nc = c as isize + dc;
+                        if nr >= 0 && nr < rows as isize && nc >= 0 && nc < columns as isize {
+                            if board.tile(nr as usize, nc as usize).unwrap().mine {
+                                count += 1;
+                            }
+                        }
+                    }
+                }
+                assert_eq!(tile.adjacent_mines, count, "Mismatch at ({}, {})", r, c);
+            }
+        }
+    }
+
+    #[test]
+    fn test_expose() {
+        let rows = 5;
+        let columns = 5;
+        let mines = 0; // 0 mines means safe expose everywhere
+        let mut board = Board::new(rows, columns, mines).unwrap();
+
+        // Expose top left
+        board.expose((0, 0)).unwrap();
+
+        // Since 0 mines, exposing one should expose all (flood fill)
+        let exposed_count = board.tiles.iter().filter(|t| t.exposed).count();
+        assert_eq!(exposed_count, rows * columns);
+    }
+
+    #[test]
+    fn test_win_condition() {
+        let rows = 3;
+        let columns = 3;
+        let mines = 1;
+        let mut board = Board::new(rows, columns, mines).unwrap();
+
+        // Find the mine
+        let mut mine_coord = (0, 0);
+        for r in 0..rows {
+            for c in 0..columns {
+                if board.tile(r, c).unwrap().mine {
+                    mine_coord = (r, c);
+                    break;
+                }
+            }
+        }
+
+        // Expose all non-mine cells
+        for r in 0..rows {
+            for c in 0..columns {
+                if (r, c) != mine_coord {
+                    board.expose((r, c)).unwrap();
+                }
+            }
+        }
+
+        assert!(board.won());
+    }
+
+    #[test]
+    fn test_flagging() {
+        let rows = 5;
+        let columns = 5;
+        let mines = 5;
+        let mut board = Board::new(rows, columns, mines).unwrap();
+
+        // Flag a cell
+        let flags_before = board.flagged_cells;
+        board.flag(0, 0).unwrap();
+        assert_eq!(board.flagged_cells, flags_before + 1);
+        assert!(board.tile(0, 0).unwrap().flagged);
+
+        // Unflag
+        board.flag(0, 0).unwrap();
+        assert_eq!(board.flagged_cells, flags_before);
+        assert!(!board.tile(0, 0).unwrap().flagged);
     }
 }
