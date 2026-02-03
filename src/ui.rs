@@ -403,7 +403,7 @@ impl Ui {
                     let info_text_split_rects = Layout::default()
                         .direction(Direction::Vertical)
                         .constraints(vec![
-                            Constraint::Min(vertical_pad_block_height - 3),
+                            Constraint::Min(vertical_pad_block_height.saturating_sub(3)),
                             Constraint::Length(3),
                         ])
                         .split(middle_mines_rects[0]);
