@@ -17,10 +17,10 @@ ctrlc = "^3.4.2"
 num-traits = "^0.2.18"
 rand = "^0.8.5"
 structopt = "^0.3.26"
-termion = "^3.0.0"
+crossterm = "0.27"
 thiserror = "^1.0.57"
 ratatui = { version = "^0.26.0", features = [
-  "termion",
+  "crossterm",
 ], default-features = false }
 typed-builder = "^0.18.1"
 

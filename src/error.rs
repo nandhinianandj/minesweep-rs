@@ -15,7 +15,7 @@ pub(crate) enum Error {
     #[error("failed to get stdout in raw mode")]
     GetStdoutInRawMode(#[source] std::io::Error),
 
-    #[error("failed to get alternate screen for mouse terminal")]
+    #[error("failed to enter alternate screen")]
     GetAlternateScreenForMouseTerminal(#[source] std::io::Error),
 
     #[error("failed to create terminal object")]
