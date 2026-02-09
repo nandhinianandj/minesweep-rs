@@ -5,7 +5,7 @@ use crate::{
 };
 use num_traits::ToPrimitive;
 use ratatui::{
-    backend::TermionBackend,
+    backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::Span,
@@ -19,7 +19,11 @@ use std::{
         Arc,
     },
 };
-use termion::{event::Key, input::MouseTerminal, raw::IntoRawMode, screen::IntoAlternateScreen};
+use crossterm::{
+    event::KeyCode,
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
 
 fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
     let Rect {
@@ -284,13 +288,10 @@ impl Ui {
         let mut app = App::new(Board::new(rows, columns, mines)?);
         let mut lost = false;
 
-        let stdout = io::stdout()
-            .into_raw_mode()
-            .map_err(Error::GetStdoutInRawMode)?
-            .into_alternate_screen()
-            .map_err(Error::GetAlternateScreenForMouseTerminal)?;
-        let mouse_terminal = MouseTerminal::from(stdout);
-        let backend = TermionBackend::new(mouse_terminal);
+        enable_raw_mode().map_err(Error::GetStdoutInRawMode)?;
+        let mut stdout = io::stdout();
+        execute!(stdout, EnterAlternateScreen).map_err(Error::GetAlternateScreenForMouseTerminal)?;
+        let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend).map_err(Error::CreateTerminal)?;
 
         while running.load(Ordering::SeqCst) {
@@ -402,7 +403,7 @@ impl Ui {
                     let info_text_split_rects = Layout::default()
                         .direction(Direction::Vertical)
                         .constraints(vec![
-                            Constraint::Min(vertical_pad_block_height - 3),
+                            Constraint::Min(vertical_pad_block_height.saturating_sub(3)),
                             Constraint::Length(3),
                         ])
                         .split(middle_mines_rects[0]);
@@ -507,24 +508,29 @@ impl Ui {
                 .map_err(Error::DrawToTerminal)?;
 
             if let Event::Input(key) = events.next().map_err(Error::GetEvent)? {
-                match key {
+                match key.code {
                     // movement using arrow keys or vim movement keys
-                    Key::Up | Key::Char('k') => app.up(),
-                    Key::Down | Key::Char('j') => app.down(),
-                    Key::Left | Key::Char('h') => app.left(),
-                    Key::Right | Key::Char('l') => app.right(),
-                    Key::Char('f') if !lost && !app.won() => app.flag_active_cell()?,
-                    Key::Char(' ') if !lost && !app.won() && !app.active_cell().is_flagged() => {
+                    KeyCode::Up | KeyCode::Char('k') => app.up(),
+                    KeyCode::Down | KeyCode::Char('j') => app.down(),
+                    KeyCode::Left | KeyCode::Char('h') => app.left(),
+                    KeyCode::Right | KeyCode::Char('l') => app.right(),
+                    KeyCode::Char('f') if !lost && !app.won() => app.flag_active_cell()?,
+                    KeyCode::Char(' ') if !lost && !app.won() && !app.active_cell().is_flagged() => {
                         lost = app.expose_active_cell()?;
                         if lost {
                             app.expose_all()?;
                         }
                     }
-                    Key::Char('q') => break,
+                    KeyCode::Char('q') => break,
                     _ => {}
                 }
             }
         }
+
+        disable_raw_mode().map_err(Error::GetStdoutInRawMode)?;
+        execute!(io::stdout(), LeaveAlternateScreen)
+            .map_err(Error::GetAlternateScreenForMouseTerminal)?;
+        terminal.show_cursor().map_err(Error::DrawToTerminal)?;
 
         Ok(())
     }
